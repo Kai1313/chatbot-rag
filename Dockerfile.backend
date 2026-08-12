@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies needed for psycopg2 and building packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python requirements
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend code and dataset file (use JSON array for filenames with spaces)
+COPY backend/ /app/
+COPY ["PERIZINAN PBG.xlsx", "/app/PERIZINAN PBG.xlsx"]
+
+EXPOSE 8000
+
+CMD ["python", "start.py"]
