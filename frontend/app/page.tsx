@@ -54,12 +54,11 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // Dynamic API URL resolution for both localhost and mobile IP access
-      let apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      if (typeof window !== 'undefined') {
-        const host = window.location.hostname || 'localhost';
-        apiUrl = `http://${host}:8000`;
-      }
+      // Always derive API host from browser window URL on port 8080 (e.g. 192.168.1.13:8080 or localhost:8080)
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+      const apiUrl = `http://${currentHost}:8080`;
+
+      console.log(`Sending chat request to: ${apiUrl}/api/chat`);
 
       const res = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
