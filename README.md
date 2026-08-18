@@ -4,7 +4,7 @@
 
 It uses a **Hybrid RAG System**:
 * **Semantic Vector Search (ChromaDB)** for retrieving document requirements from the `SYARAT` dataset.
-* **Structured SQL Lookups (PostgreSQL)** for exact, 100% accurate application tracking logs from the `TRANSAKSI` dataset.
+* **Structured SQL Lookups (PostgreSQL)** for exact, 100% accurate application tracking logs from the `PERIZINAN_PBG_2.xlsx` (`Transaksi2`) dataset across 95 registration numbers.
 
 ---
 
@@ -33,7 +33,7 @@ docker compose up --build -d
 ```
 
 Access the services:
-* **Mobile-First PWA Frontend**: [http://localhost:3000](http://localhost:3000) or `http://192.168.1.13:3000` (on mobile Wi-Fi)
+* **Mobile-First PWA Frontend**: [http://localhost:3000](http://localhost:3000) or `http://<your-ip>:3000` (on mobile Wi-Fi)
 * **FastAPI Backend API**: [http://localhost:8080](http://localhost:8080)
 * **API Documentation**: [http://localhost:8080/docs](http://localhost:8080/docs)
 
@@ -55,6 +55,21 @@ You can connect directly to the running PostgreSQL container from your desktop D
 
 PBG Assist is built mobile-first:
 1. Connect your smartphone to the same Wi-Fi network as your computer.
-2. Open `http://<your-computer-ip>:3000` (e.g. `http://192.168.1.13:3000`) on Chrome (Android) or Safari (iOS).
+2. Open `http://<your-computer-ip>:3000` on Chrome (Android) or Safari (iOS).
 3. Tap the browser menu $\rightarrow$ Select **"Add to Home Screen"** or **"Install App"**.
 4. PBG Assist will install as a standalone native app icon on your smartphone.
+
+---
+
+## 🧪 Automated Testing (Playwright E2E & API)
+
+Automated end-to-end and integration tests are provided in the `testing/` directory:
+
+```bash
+cd testing
+npx playwright install
+npm test
+```
+
+* **Interactive UI Mode**: `npm run test:ui`
+* **HTML Test Report**: `npm run test:report`
