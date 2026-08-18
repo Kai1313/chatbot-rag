@@ -2,11 +2,19 @@
 .env
 .env.local
 
+# Data sources & spreadsheets (confidential/local only)
+*.xlsx
+*.xls
+*.csv
+
 # Node.js / Next.js
 node_modules/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+testing/node_modules/
+testing/playwright-report/
+testing/test-results/
 
 # Python / FastAPI
 __pycache__/
