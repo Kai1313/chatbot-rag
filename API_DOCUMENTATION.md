@@ -1,13 +1,13 @@
-# PBG Assist REST API Documentation
+# Hybrid RAG Chatbot REST API Documentation
 
-This document outlines the API endpoints provided by the **FastAPI Backend Service** running at `http://localhost:8000`.
+This document outlines the REST API endpoints provided by the **FastAPI Backend Service** running on host port `8080` (`http://localhost:8080`).
 
 ---
 
 ## 1. System Healthcheck
 
 ### `GET /api/health`
-Verifies backend service, PostgreSQL database connectivity, and current LLM provider configuration.
+Verifies backend service status, PostgreSQL database connectivity, and current LLM provider configuration.
 
 * **Request**: None
 * **Response (200 OK)**:
@@ -60,26 +60,26 @@ Primary endpoint for the PWA client to send user queries, perform RAG retrieval 
 ### `GET /api/status/{no_daftar}`
 Direct JSON lookup for application tracking history by registration number (`no_daftar`).
 
-* **Example**: `GET /api/status/6680`
+* **Example**: `GET /api/status/108564` or `GET /api/status/6680`
 * **Response (200 OK)**:
 ```json
 {
-  "registration_id": "6680",
+  "registration_id": "108564",
   "status": "Ditemukan",
-  "total_steps": 22,
+  "total_steps": 14,
   "latest_step": {
-    "id": 1,
-    "no_urut": 1.0,
-    "no_daftar": "6680",
+    "id": 124,
+    "no_urut": 14.0,
+    "no_daftar": "108564",
     "tahun_daftar": 2026,
-    "peruntukan": "PBG Non Rumah Tinggal Non Usaha Mikro Bukan Bangunan Gedung",
-    "tgl_menerima": "2026-01-22T11:35:22",
-    "tgl_pemrosesan": "2026-01-22T15:50:48",
-    "nama_pemroses": "Indah Mayasari, A.Md., S.T.",
-    "dari_tahap": "Penomoran Surat Izin / Rekom di DPMPTSP",
+    "peruntukan": "PBG Rumah Tinggal Sederhana",
+    "tgl_menerima": "2026-01-15T08:30:00",
+    "tgl_pemrosesan": "2026-01-15T11:45:00",
+    "nama_pemroses": "Budi Santoso, S.T.",
+    "dari_tahap": "Penerbitan Surat Ketetapan Retribusi (SKRD)",
     "menuju_tahap": "Berkas Dinyatakan Selesai ( SK telah Terbit )",
     "keterangan_proses": "BERKAS SELESAI",
-    "status_waktu": "Terlambat"
+    "status_waktu": "Tepat Waktu"
   }
 }
 ```
@@ -89,7 +89,7 @@ Direct JSON lookup for application tracking history by registration number (`no_
 ## 4. Trigger Background Data Ingestion
 
 ### `POST /api/ingest`
-Triggers a background task to re-parse `PERIZINAN PBG.xlsx` and reload PostgreSQL & ChromaDB.
+Triggers a background task to re-parse the target dataset (`PERIZINAN_PBG_2.xlsx` / custom data file) and reload PostgreSQL & ChromaDB.
 
 * **Response (200 OK)**:
 ```json

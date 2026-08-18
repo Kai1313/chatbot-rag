@@ -1,6 +1,6 @@
-# PBG Assist — Playwright End-to-End Test Suite
+# Playwright End-to-End & Integration Test Suite
 
-This directory contains the automated Playwright test suite for **PBG Assist**, covering both Mobile/Desktop PWA UI flows and Backend API integration tests.
+This directory contains the automated Playwright test suite for the **Hybrid RAG Chatbot & Tracking Engine**, covering both Mobile/Desktop PWA UI flows and Backend REST API integration tests.
 
 ---
 
@@ -9,7 +9,7 @@ This directory contains the automated Playwright test suite for **PBG Assist**, 
 ```
 testing/
 ├── package.json               # Playwright test dependencies & test scripts
-├── playwright.config.ts       # Configured with Desktop Chrome, Mobile Chrome (Pixel 5), and Mobile Safari (iPhone 12)
+├── playwright.config.ts       # Configured for Desktop Chrome, Mobile Chrome (Pixel 5), and Mobile Safari (iPhone 12)
 └── tests/
     ├── pbg_assist.spec.ts     # E2E UI tests (welcome screen, RAG query, status check, reset chat)
     └── pbg_api.spec.ts        # Direct REST API tests (/api/health, /api/status, /api/chat)
