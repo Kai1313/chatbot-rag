@@ -21,8 +21,12 @@ def excel_serial_to_datetime(serial_num):
         return None
 
 def find_excel_file():
-    """Finds PERIZINAN PBG.xlsx in common target locations."""
+    """Finds PERIZINAN_PBG_2.xlsx or PERIZINAN PBG.xlsx in common target locations."""
     candidates = [
+        Path(__file__).parent / "PERIZINAN_PBG_2.xlsx",
+        Path(__file__).parent.parent / "PERIZINAN_PBG_2.xlsx",
+        Path("/app/PERIZINAN_PBG_2.xlsx"),
+        Path("PERIZINAN_PBG_2.xlsx"),
         Path(__file__).parent / "PERIZINAN PBG.xlsx",
         Path(__file__).parent.parent / "PERIZINAN PBG.xlsx",
         Path("/app/PERIZINAN PBG.xlsx"),
@@ -31,7 +35,7 @@ def find_excel_file():
     for p in candidates:
         if p.exists():
             return p
-    raise FileNotFoundError("PERIZINAN PBG.xlsx could not be located in project directories.")
+    raise FileNotFoundError("Excel dataset file could not be located in project directories.")
 
 def parse_xlsx_raw(file_path):
     """Raw XML parser for XLSX files (works without pandas or openpyxl)."""
@@ -76,8 +80,8 @@ def parse_xlsx_raw(file_path):
         return results
 
 def ingest_to_postgresql(excel_path):
-    """Ingests TRANSAKSI sheet into PostgreSQL database."""
-    print("--- 1. Ingesting TRANSAKSI to PostgreSQL ---")
+    """Ingests Transaksi2 sheet (or TRANSAKSI fallback) into PostgreSQL database."""
+    print("--- 1. Ingesting Transaksi to PostgreSQL ---")
     try:
         from database import engine, Base
         from models import Transaksi
@@ -87,13 +91,17 @@ def ingest_to_postgresql(excel_path):
         return
 
     raw_sheets = parse_xlsx_raw(excel_path)
-    rows = raw_sheets.get("TRANSAKSI ", raw_sheets.get("TRANSAKSI", []))
+    
+    # Prioritize Transaksi2 sheet from PERIZINAN_PBG_2.xlsx
+    rows = raw_sheets.get("Transaksi2", raw_sheets.get("TRANSAKSI ", raw_sheets.get("TRANSAKSI", [])))
+    sheet_name = "Transaksi2" if "Transaksi2" in raw_sheets else "TRANSAKSI"
+    
     if not rows:
-        print("No rows found in TRANSAKSI sheet.")
+        print(f"No rows found in {sheet_name} sheet.")
         return
 
     data = rows[1:] # Skip header
-    print(f"Parsed {len(data)} raw transaction records.")
+    print(f"Parsed {len(data)} transaction records from sheet '{sheet_name}'.")
 
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
@@ -142,7 +150,7 @@ def ingest_to_postgresql(excel_path):
 
     session.bulk_save_objects(records)
     session.commit()
-    print(f"Successfully inserted {len(records)} records into PostgreSQL table 'transaksi'.")
+    print(f"Successfully inserted {len(records)} records from sheet '{sheet_name}' into PostgreSQL table 'transaksi'.")
     session.close()
 
 def ingest_to_chromadb(excel_path):
@@ -171,7 +179,7 @@ def ingest_to_chromadb(excel_path):
         client.delete_collection(name=collection_name)
     except Exception:
         pass
-    collection = client.create_create_collection(name=collection_name)
+    collection = client.create_collection(name=collection_name)
 
     grouped = {}
     for r in data:
