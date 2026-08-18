@@ -61,6 +61,16 @@ PBG Assist is built mobile-first:
 
 ---
 
+## 📊 Custom Data Sources & Schema Template
+
+To adapt this chatbot to your own dataset (Excel / CSV / JSON / Database):
+* Read the **[Data Schema Guide](data_template/DATA_SCHEMA_GUIDE.md)** for column definitions and data types.
+* Inspect sample template files:
+  * `data_template/sample_syarat.csv` (Requirements & Knowledge Base)
+  * `data_template/sample_transaksi.csv` (Multi-stage tracking logs)
+
+---
+
 ## 🧪 Automated Testing (Playwright E2E & API)
 
 Automated end-to-end and integration tests are provided in the `testing/` directory:
@@ -73,3 +83,11 @@ npm test
 
 * **Interactive UI Mode**: `npm run test:ui`
 * **HTML Test Report**: `npm run test:report`
+
+---
+
+## 📚 Additional Documentation
+
+* **[API Documentation](API_DOCUMENTATION.md)** — FastAPI REST endpoints reference.
+* **[Prompt & Guardrails Guide](PROMPT_GUIDE.md)** — System prompt personas and out-of-scope protection rules.
+* **[Architecture & Build Plan](RAG_BUILD_PLAN.md)** — Full technical specification and architecture diagrams.
