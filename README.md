@@ -4,6 +4,7 @@ A modern, fullstack, mobile-first **Progressive Web App (PWA) Chatbot & Real-Tim
 * **Semantic Vector Search (ChromaDB)** for answering complex rules, guidelines, and document requirements.
 * **Structured Relational Database (PostgreSQL)** for exact, 100% accurate status lookups across multi-stage application workflows.
 * **Self-Hosted & Cloud Hybrid Document Vault**: Direct file preview & download for PDFs, blueprints (AutoCAD DWG), and site photos with zero rate limits (switchable to Google Drive / S3).
+* **🎙️ Voice Interaction (STT & TTS)**: Indonesian speech-to-text voice input via microphone and natural text-to-speech voice playback with on-demand *"Dengarkan"* triggers.
 * **Model-Agnostic AI Engine**: Seamlessly switch between **DeepSeek-V3**, **Google Gemini**, **Groq**, **OpenAI**, or **Ollama** via simple `.env` toggles.
 
 > 💡 **Reference Implementation Included**: Out of the box, this repository includes **PBG Assist** (Building Permit Assistant) as a fully functional domain template, but it can be adapted to **any custom tracking or support workflow** (permits, licensing, hospital queues, logistics, or customer service tickets).
@@ -13,6 +14,9 @@ A modern, fullstack, mobile-first **Progressive Web App (PWA) Chatbot & Real-Tim
 ## 🌟 Key Features
 
 * **📱 Mobile-First PWA**: Touch-optimized Next.js 14 frontend with quick prompt pills, markdown rendering, clickable document links, and "Add to Home Screen" support (iOS / Android).
+* **🎙️ Voice-Enabled AI Assistant**:
+  * **Speech-to-Text (STT)**: Speak queries directly in Indonesian using the `<Mic />` microphone button.
+  * **Text-to-Speech (TTS)**: Listen to AI responses in natural Indonesian using the `[🔊 Dengarkan]` on-demand audio button or optional hands-free auto-voice mode.
 * **🧠 Hybrid RAG Architecture**:
   * Vector Store (`ChromaDB`) for unstructured domain knowledge.
   * Relational DB (`PostgreSQL` on port `5431`) for exact SQL queries & status logs.
@@ -57,6 +61,17 @@ Access the services:
 * **Mobile-First PWA Frontend**: [http://localhost:3000](http://localhost:3000) or `http://<your-computer-ip>:3000` (on mobile Wi-Fi)
 * **FastAPI Backend API**: [http://localhost:8080](http://localhost:8080)
 * **Interactive API Docs**: [http://localhost:8080/docs](http://localhost:8080/docs)
+
+---
+
+## 🎙️ Voice Features & How to Use
+
+1. **Voice Input (Speech-to-Text via `<Mic />`)**:
+   * On desktop (`localhost:3000`): Tap the **Microphone icon (`<Mic />`)**, allow microphone access, and speak in Indonesian.
+   * On mobile (`IP:3000`): Tap the chat input box and use the **native microphone button on your smartphone keyboard** (Gboard / iOS Keyboard) for instant, security-compliant voice typing.
+2. **Voice Output (Text-to-Speech via `[🔊 Dengarkan]`)**:
+   * Every assistant response bubble features an on-demand **`[🔊 Dengarkan]`** button. Tap it to listen to the explanation.
+   * Tap the **Speaker icon in the header** to toggle continuous hands-free auto-play mode.
 
 ---
 

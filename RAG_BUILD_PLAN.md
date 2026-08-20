@@ -179,3 +179,4 @@ volumes:
 - [x] **Step 7: Custom Dataset Templates & Schema Guide**: Created `data_template/DATA_SCHEMA_GUIDE.md`, `data_template/sample_syarat.csv`, and `data_template/sample_transaksi.csv`.
 - [x] **Step 8: Data Privacy & Git Security**: Configured `.gitignore` to exclude `*.xlsx`, `*.xls`, `*.csv`, and `data/documents/` from Git repository tracking.
 - [x] **Step 9: Hybrid Document Vault Storage (`development` branch)**: Created `backend/storage.py` abstraction, `check_document_vault` tool, `/storage/documents` static file server, and UI clickable link rendering.
+- [x] **Step 10: Indonesian Voice Interaction (STT & TTS)**: Implemented Web Speech API Speech-to-Text (`<Mic />`) with live status feedback and natural Indonesian Text-to-Speech with on-demand `[🔊 Dengarkan]` message triggers.
