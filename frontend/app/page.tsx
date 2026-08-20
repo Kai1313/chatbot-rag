@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive, Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react';
+import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive, Mic, MicOff, Volume2, VolumeX, Square } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -22,19 +22,19 @@ export default function Home() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Selamat datang di **PBG Assist**! 👋\n\nSaya adalah asisten AI resmi untuk Layanan Persetujuan Bangunan Gedung (PBG).\n\nAda yang bisa saya bantu hari ini?\n* **Tanyakan Persyaratan:** Dokumen PBG Rumah Tinggal, Usaha Mikro, Gedung, dll.\n* **Cek Status Permohonan:** Masukkan nomor berkas registrasi Anda (contoh: *108564* atau *6680*).\n* **Buka Brangkas Dokumen:** Lihat dan unduh lampiran/berkas (contoh: *Tampilkan dokumen berkas 6680*).\n* 🎙️ **Ketik atau Bicara:** Anda bisa berbicara langsung menggunakan tombol mikrofon!`,
+      content: `Selamat datang di **PBG Assist**! 👋\n\nSaya adalah asisten AI resmi untuk Layanan Persetujuan Bangunan Gedung (PBG).\n\nAda yang bisa saya bantu hari ini?\n* **Tanyakan Persyaratan:** Dokumen PBG Rumah Tinggal, Usaha Mikro, Gedung, dll.\n* **Cek Status Permohonan:** Masukkan nomor berkas registrasi Anda (contoh: *108564* atau *6680*).\n* **Buka Brangkas Dokumen:** Lihat dan unduh lampiran/berkas (contoh: *Tampilkan dokumen berkas 6680*).\n* 🎙️ **Bicara via Mikrofon:** Klik tombol mic untuk berbicara langsung!\n* 🔊 **Dengarkan Suara:** Klik ikon speaker pada pesan untuk mendengarkan jawaban.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [autoVoice, setAutoVoice] = useState(true);
+  const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [micStatusMsg, setMicStatusMsg] = useState<string | null>(null);
-  const [lastSpokenId, setLastSpokenId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionInstanceRef = useRef<any>(null);
+  const recognitionRef = useRef<any>(null);
   const voiceInitializedRef = useRef(false);
 
   const scrollToBottom = () => {
@@ -62,7 +62,7 @@ export default function Home() {
       .trim();
   };
 
-  // Prime speech engine for mobile iOS/Android browsers on user interaction
+  // Prime speech engine for mobile iOS/Android browsers on first user touch
   const initVoice = useCallback(() => {
     if (!voiceInitializedRef.current && typeof window !== 'undefined' && window.speechSynthesis) {
       const utterance = new SpeechSynthesisUtterance(' ');
@@ -74,7 +74,7 @@ export default function Home() {
     }
   }, []);
 
-  // Find the best Indonesian speech voice
+  // Find best available voice
   const getBestVoice = (): SpeechSynthesisVoice | null => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
@@ -87,48 +87,85 @@ export default function Home() {
     );
   };
 
-  // Stop listening helper
-  const stopListening = useCallback(() => {
-    if (recognitionInstanceRef.current) {
-      try {
-        recognitionInstanceRef.current.stop();
-      } catch (e) {
-        console.warn('Error stopping recognition:', e);
-      }
-      recognitionInstanceRef.current = null;
-    }
-    setIsListening(false);
-    setMicStatusMsg(null);
-  }, []);
-
-  // Start fresh listening session
-  const startListening = async () => {
+  // Speak a specific message
+  const speakMessage = (messageId: string, text: string) => {
     initVoice();
+
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      alert('Browser Anda tidak mendukung fitur pemutaran suara (Speech Synthesis).');
+      return;
+    }
+
+    // If already speaking this message, toggle pause/stop
+    if (currentlySpeakingId === messageId && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setCurrentlySpeakingId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const cleaned = cleanForSpeech(text);
+    if (!cleaned) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.lang = 'id-ID';
+    utterance.rate = 0.95;
+    utterance.pitch = 1.05;
+    utterance.volume = 1;
+
+    const bestVoice = getBestVoice();
+    if (bestVoice) utterance.voice = bestVoice;
+
+    utterance.onstart = () => {
+      setCurrentlySpeakingId(messageId);
+    };
+
+    utterance.onend = () => {
+      setCurrentlySpeakingId(null);
+    };
+
+    utterance.onerror = () => {
+      setCurrentlySpeakingId(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Stop any active speech
+  const stopSpeech = () => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setCurrentlySpeakingId(null);
+  };
+
+  // Speech Recognition (STT / Voice Input)
+  const toggleListening = () => {
+    initVoice();
+    stopSpeech();
 
     if (typeof window === 'undefined') return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Browser ini belum mendukung Web Speech API atau fitur pengenalan suara diblokir. Pastikan Anda mengakses via http://localhost:3000 atau koneksi HTTPS.');
+      alert('Browser Anda belum mendukung Speech Recognition. Silakan gunakan Google Chrome, Microsoft Edge, atau Safari.');
       return;
     }
 
-    // Request microphone permissions first
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
-    } catch (permErr: any) {
-      console.error('Microphone permission error:', permErr);
-      setMicStatusMsg('⚠️ Izin mikrofon ditolak di browser. Mohon izinkan mikrofon di pengaturan browser.');
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+      setIsListening(false);
+      setMicStatusMsg(null);
       return;
     }
 
     try {
-      // Always create a clean new instance per session to avoid invalid state errors
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = 'id-ID';
 
@@ -144,95 +181,47 @@ export default function Home() {
         }
         if (transcript) {
           setInput(transcript);
-          setMicStatusMsg(`🎙️ Mendengarkan: "${transcript.slice(-40)}"`);
+          setMicStatusMsg(`🎙️ Terdeteksi: "${transcript}"`);
         }
       };
 
       recognition.onerror = (event: any) => {
         console.warn('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
-          setMicStatusMsg('⚠️ Izin mikrofon ditolak oleh browser.');
+          alert('Izin akses mikrofon ditolak di browser Anda. Klik ikon gembok / izin di sebelah URL browser dan pilih "Allow Microphone".');
+          setMicStatusMsg('⚠️ Izin mikrofon ditolak.');
         } else if (event.error === 'no-speech') {
-          setMicStatusMsg('Tidak ada suara terdeteksi.');
+          setMicStatusMsg('Tidak ada suara terdeteksi. Silakan coba lagi.');
         } else {
-          setMicStatusMsg(`Kendala audio: ${event.error}`);
+          setMicStatusMsg(`Status mic: ${event.error}`);
         }
-        stopListening();
+        setIsListening(false);
       };
 
       recognition.onend = () => {
         setIsListening(false);
-        setMicStatusMsg(null);
+        setTimeout(() => setMicStatusMsg(null), 2500);
       };
 
-      recognitionInstanceRef.current = recognition;
+      recognitionRef.current = recognition;
       recognition.start();
     } catch (err: any) {
-      console.error('Failed to start speech recognition:', err);
-      setMicStatusMsg(`Gagal memulai mikrofon: ${err.message || err}`);
+      console.error('Error starting speech recognition:', err);
+      alert(`Gagal mengakses mikrofon: ${err.message || err}`);
       setIsListening(false);
     }
   };
 
-  const toggleListening = () => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  };
-
-  // Text-to-Speech (TTS / Voice Output) Player
-  useEffect(() => {
-    if (!loading && voiceEnabled && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg.role === 'assistant' && lastMsg.content && lastMsg.id !== lastSpokenId && lastMsg.id !== 'welcome') {
-        setLastSpokenId(lastMsg.id);
-
-        if (typeof window === 'undefined' || !window.speechSynthesis) return;
-
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
-        }
-
-        const speak = () => {
-          const cleaned = cleanForSpeech(lastMsg.content);
-          if (!cleaned) return;
-
-          const utterance = new SpeechSynthesisUtterance(cleaned);
-          utterance.lang = 'id-ID';
-          utterance.rate = 0.95;
-          utterance.pitch = 1.05;
-          utterance.volume = 1;
-
-          const bestVoice = getBestVoice();
-          if (bestVoice) utterance.voice = bestVoice;
-
-          window.speechSynthesis.speak(utterance);
-        };
-
-        if (window.speechSynthesis.getVoices().length > 0) {
-          speak();
-        } else {
-          window.speechSynthesis.onvoiceschanged = () => {
-            speak();
-            window.speechSynthesis.onvoiceschanged = null;
-          };
-        }
-      }
-    }
-  }, [loading, messages, voiceEnabled, lastSpokenId]);
-
-  // Cancel speech immediately if user mutes voice
-  useEffect(() => {
-    if (!voiceEnabled && typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-  }, [voiceEnabled]);
-
   const handleSend = async (textToSend?: string) => {
     initVoice();
-    stopListening();
+    stopSpeech();
+
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+      setIsListening(false);
+    }
 
     const query = (textToSend || input).trim();
     if (!query || loading) return;
@@ -249,11 +238,8 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // Derive API host from browser window URL on port 8080
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
       const apiUrl = `http://${currentHost}:8080`;
-
-      console.log(`Sending chat request to: ${apiUrl}/api/chat`);
 
       const res = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
@@ -269,13 +255,21 @@ export default function Home() {
       }
 
       const data = await res.json();
+      const newBotMsgId = (Date.now() + 1).toString();
+      const botMsgText = data.reply || 'Mohon maaf, tidak ada tanggapan dari sistem.';
+
       const botMsg: Message = {
-        id: (Date.now() + 1).toString(),
+        id: newBotMsgId,
         role: 'assistant',
-        content: data.reply || 'Mohon maaf, tidak ada tanggapan dari sistem.',
+        content: botMsgText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, botMsg]);
+
+      // Auto-play voice if enabled
+      if (autoVoice) {
+        setTimeout(() => speakMessage(newBotMsgId, botMsgText), 300);
+      }
     } catch (err: any) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -381,26 +375,29 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Voice Mute/Unmute Toggle */}
+          {/* Auto-Voice Playback Toggle */}
           <button
-            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            onClick={() => {
+              if (autoVoice) stopSpeech();
+              setAutoVoice(!autoVoice);
+            }}
             className={`p-2 rounded-lg transition-colors ${
-              voiceEnabled
+              autoVoice
                 ? 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
                 : 'bg-slate-800/80 text-slate-500 hover:text-slate-300'
             }`}
-            title={voiceEnabled ? 'Suara Aktif (Klik untuk Mute)' : 'Suara Mati (Klik untuk Bunyikan)'}
+            title={autoVoice ? 'Auto-Voice Aktif (Klik untuk Mute)' : 'Auto-Voice Mati (Klik untuk Aktifkan)'}
           >
-            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {autoVoice ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
           {/* Reset Conversation */}
           <button
             onClick={() => {
-              if (typeof window !== 'undefined' && window.speechSynthesis) {
-                window.speechSynthesis.cancel();
+              stopSpeech();
+              if (isListening && recognitionRef.current) {
+                try { recognitionRef.current.stop(); } catch (e) {}
               }
-              stopListening();
               setMessages([messages[0]]);
             }}
             className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
@@ -419,15 +416,45 @@ export default function Home() {
             className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-1`}
           >
             <div
-              className={`max-w-[88%] rounded-2xl px-4 py-3 text-xs sm:text-sm shadow-md ${
+              className={`max-w-[88%] rounded-2xl px-4 py-3 text-xs sm:text-sm shadow-md relative group ${
                 msg.role === 'user'
                   ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white rounded-br-none'
                   : 'bg-slate-800/90 border border-slate-700/60 text-slate-100 rounded-bl-none'
               }`}
             >
               {msg.role === 'assistant' ? renderFormattedText(msg.content) : msg.content}
+
+              {/* Speaker Button on Assistant Bubbles */}
+              {msg.role === 'assistant' && (
+                <div className="mt-2 pt-2 border-t border-slate-700/60 flex items-center justify-between">
+                  <button
+                    onClick={() => speakMessage(msg.id, msg.content)}
+                    className={`flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md transition-all ${
+                      currentlySpeakingId === msg.id
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                        : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-sky-300'
+                    }`}
+                  >
+                    {currentlySpeakingId === msg.id ? (
+                      <>
+                        <Square className="w-3 h-3 text-rose-400 fill-rose-400" />
+                        <span>Hentikan Suara</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3 h-3 text-sky-400" />
+                        <span>Dengarkan</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
+                </div>
+              )}
             </div>
-            <span className="text-[10px] text-slate-500 px-1 font-medium">{msg.timestamp}</span>
+
+            {msg.role === 'user' && (
+              <span className="text-[10px] text-slate-500 px-1 font-medium">{msg.timestamp}</span>
+            )}
           </div>
         ))}
 
