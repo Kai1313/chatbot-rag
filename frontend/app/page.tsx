@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -22,13 +22,19 @@ export default function Home() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Selamat datang di **PBG Assist**! 👋\n\nSaya adalah asisten AI resmi untuk Layanan Persetujuan Bangunan Gedung (PBG).\n\nAda yang bisa saya bantu hari ini?\n* **Tanyakan Persyaratan:** Dokumen PBG Rumah Tinggal, Usaha Mikro, Gedung, dll.\n* **Cek Status Permohonan:** Masukkan nomor berkas registrasi Anda (contoh: *108564* atau *6680*).\n* **Buka Brangkas Dokumen:** Lihat dan unduh lampiran/berkas (contoh: *Tampilkan dokumen berkas 6680*).`,
+      content: `Selamat datang di **PBG Assist**! 👋\n\nSaya adalah asisten AI resmi untuk Layanan Persetujuan Bangunan Gedung (PBG).\n\nAda yang bisa saya bantu hari ini?\n* **Tanyakan Persyaratan:** Dokumen PBG Rumah Tinggal, Usaha Mikro, Gedung, dll.\n* **Cek Status Permohonan:** Masukkan nomor berkas registrasi Anda (contoh: *108564* atau *6680*).\n* **Buka Brangkas Dokumen:** Lihat dan unduh lampiran/berkas (contoh: *Tampilkan dokumen berkas 6680*).\n* 🎙️ **Ketik atau Bicara:** Anda bisa berbicara langsung menggunakan tombol mikrofon!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [lastSpokenId, setLastSpokenId] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const voiceInitializedRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -38,7 +44,157 @@ export default function Home() {
     scrollToBottom();
   }, [messages, loading]);
 
+  // Clean Markdown syntax before sending to Text-to-Speech synthesizer
+  const cleanForSpeech = (text: string): string => {
+    return text
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/[*_]{1,3}/g, '')
+      .replace(/^\s*[-+•]\s+/gm, '')
+      .replace(/^\s*\d+[.)\s]+/gm, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/`+/g, '')
+      .replace(/^[-*_]{3,}$/gm, '')
+      .replace(/^>\s*/gm, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/  +/g, ' ')
+      .trim();
+  };
+
+  // Prime speech engine for mobile iOS/Android browsers on user interaction
+  const initVoice = useCallback(() => {
+    if (!voiceInitializedRef.current && typeof window !== 'undefined' && window.speechSynthesis) {
+      const utterance = new SpeechSynthesisUtterance(' ');
+      utterance.volume = 0.01;
+      utterance.rate = 10;
+      window.speechSynthesis.speak(utterance);
+      window.speechSynthesis.getVoices();
+      voiceInitializedRef.current = true;
+    }
+  }, []);
+
+  // Find the best Indonesian speech voice
+  const getBestVoice = (): SpeechSynthesisVoice | null => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    return (
+      voices.find(v => v.lang === 'id-ID') ||
+      voices.find(v => v.lang.startsWith('id')) ||
+      voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('samantha')) ||
+      voices.find(v => v.lang.startsWith('en')) ||
+      null
+    );
+  };
+
+  // Speech Recognition (STT / Voice Input) Setup
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'id-ID';
+
+        recognition.onresult = (event: any) => {
+          let transcript = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+          }
+          if (transcript) {
+            setInput(transcript);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('Speech recognition error:', event.error);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+  }, []);
+
+  const toggleListening = () => {
+    initVoice();
+    if (!recognitionRef.current) {
+      alert('Browser Anda belum mendukung fitur pengenalan suara (Speech Recognition).');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.error('Error starting recognition:', err);
+      }
+    }
+  };
+
+  // Text-to-Speech (TTS / Voice Output) Player
+  useEffect(() => {
+    if (!loading && voiceEnabled && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === 'assistant' && lastMsg.content && lastMsg.id !== lastSpokenId && lastMsg.id !== 'welcome') {
+        setLastSpokenId(lastMsg.id);
+
+        if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+        }
+
+        const speak = () => {
+          const cleaned = cleanForSpeech(lastMsg.content);
+          if (!cleaned) return;
+
+          const utterance = new SpeechSynthesisUtterance(cleaned);
+          utterance.lang = 'id-ID';
+          utterance.rate = 0.95;
+          utterance.pitch = 1.05;
+          utterance.volume = 1;
+
+          const bestVoice = getBestVoice();
+          if (bestVoice) utterance.voice = bestVoice;
+
+          window.speechSynthesis.speak(utterance);
+        };
+
+        if (window.speechSynthesis.getVoices().length > 0) {
+          speak();
+        } else {
+          window.speechSynthesis.onvoiceschanged = () => {
+            speak();
+            window.speechSynthesis.onvoiceschanged = null;
+          };
+        }
+      }
+    }
+  }, [loading, messages, voiceEnabled, lastSpokenId]);
+
+  // Cancel speech immediately if user mutes voice
+  useEffect(() => {
+    if (!voiceEnabled && typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [voiceEnabled]);
+
   const handleSend = async (textToSend?: string) => {
+    initVoice();
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+
     const query = (textToSend || input).trim();
     if (!query || loading) return;
 
@@ -54,7 +210,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // Derive API host from browser URL on port 8080
+      // Derive API host from browser window URL on port 8080
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
       const apiUrl = `http://${currentHost}:8080`;
 
@@ -181,17 +337,38 @@ export default function Home() {
               PBG Assist
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium">Asisten Layanan Izin Bangunan</p>
+            <p className="text-[11px] text-slate-400 font-medium">Asisten Suara & Izin Bangunan</p>
           </div>
         </div>
 
-        <button
-          onClick={() => setMessages([messages[0]])}
-          className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
-          title="Reset Percakapan"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Voice Mute/Unmute Toggle */}
+          <button
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            className={`p-2 rounded-lg transition-colors ${
+              voiceEnabled
+                ? 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
+                : 'bg-slate-800/80 text-slate-500 hover:text-slate-300'
+            }`}
+            title={voiceEnabled ? 'Suara Aktif (Klik untuk Mute)' : 'Suara Mati (Klik untuk Bunyikan)'}
+          >
+            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
+          {/* Reset Conversation */}
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+              }
+              setMessages([messages[0]]);
+            }}
+            className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            title="Reset Percakapan"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* Main Chat Messages Container */}
@@ -245,7 +422,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Sticky Bottom Input Bar */}
+      {/* Sticky Bottom Input Bar with Microphone STT */}
       <footer className="p-3 bg-slate-900 border-t border-slate-800 sticky bottom-0 z-20">
         <form
           onSubmit={(e) => {
@@ -254,12 +431,30 @@ export default function Home() {
           }}
           className="flex items-center gap-2"
         >
+          {/* Microphone Voice Input Button */}
+          <button
+            type="button"
+            onClick={toggleListening}
+            className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center ${
+              isListening
+                ? 'bg-rose-600 border-rose-500 text-white animate-pulse shadow-lg shadow-rose-600/40'
+                : 'bg-slate-800/90 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-sky-400'
+            }`}
+            title={isListening ? 'Mendengarkan suara Anda... (Klik untuk berhenti)' : 'Klik untuk bicara (Voice Input)'}
+          >
+            {isListening ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4" />}
+          </button>
+
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Tanyakan syarat, no. berkas, atau buka dokumen..."
-            className="flex-1 bg-slate-950 border border-slate-700/80 focus:border-sky-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all"
+            placeholder={isListening ? 'Sedang mendengarkan suara Anda...' : 'Ketik atau gunakan mikrofon...'}
+            className={`flex-1 bg-slate-950 border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 transition-all ${
+              isListening
+                ? 'border-rose-500/80 focus:ring-rose-500 text-rose-200'
+                : 'border-slate-700/80 focus:border-sky-500 focus:ring-sky-500'
+            }`}
           />
           <button
             type="submit"
