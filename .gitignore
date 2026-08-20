@@ -7,6 +7,10 @@
 *.xls
 *.csv
 
+# Document vault (confidential user files & blueprints)
+data/documents/
+data/storage/
+
 # Node.js / Next.js
 node_modules/
 frontend/node_modules/

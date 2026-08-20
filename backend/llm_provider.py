@@ -3,8 +3,10 @@ from config import (
     LLM_PROVIDER, LLM_MODEL, DEEPSEEK_API_KEY, GEMINI_API_KEY,
     GROQ_API_KEY, OPENAI_API_KEY, OLLAMA_BASE_URL, SYSTEM_PROMPT
 )
-from tools import TOOL_CHECK_PBG_STATUS, TOOL_REGISTRY
+from tools import TOOL_CHECK_PBG_STATUS, TOOL_CHECK_DOCUMENT_VAULT, TOOL_REGISTRY
 from rag_retriever import query_rag_syarat
+
+ALL_OPENAI_TOOLS = [TOOL_CHECK_PBG_STATUS, TOOL_CHECK_DOCUMENT_VAULT]
 
 def generate_chat_response(user_message: str, history: list = None) -> str:
     """
@@ -66,35 +68,33 @@ def _call_openai_compatible(user_message: str, history: list, system_prompt: str
         response = client.chat.completions.create(
             model=model_name,
             messages=messages,
-            tools=[TOOL_CHECK_PBG_STATUS],
+            tools=ALL_OPENAI_TOOLS,
             tool_choice="auto"
         )
         
         choice = response.choices[0]
         msg = choice.message
 
-        # Handle tool call if requested by model
+        # Handle tool calls if requested by model
         if msg.tool_calls:
-            tool_call = msg.tool_calls[0]
-            func_name = tool_call.function.name
-            func_args = json.loads(tool_call.function.arguments)
+            messages.append(msg)
+            for tool_call in msg.tool_calls:
+                func_name = tool_call.function.name
+                func_args = json.loads(tool_call.function.arguments)
 
-            if func_name in TOOL_REGISTRY:
-                tool_result = TOOL_REGISTRY[func_name](**func_args)
-                
-                # Append tool call and result to message history for final generation
-                messages.append(msg)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": tool_result
-                })
+                if func_name in TOOL_REGISTRY:
+                    tool_result = TOOL_REGISTRY[func_name](**func_args)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": tool_result
+                    })
 
-                second_response = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages
-                )
-                return second_response.choices[0].message.content
+            second_response = client.chat.completions.create(
+                model=model_name,
+                messages=messages
+            )
+            return second_response.choices[0].message.content
 
         return msg.content or ""
 
@@ -106,7 +106,6 @@ def _call_gemini(user_message: str, history: list, system_prompt: str) -> str:
     try:
         from google import genai
         from google.genai import types
-        from tools import TOOL_DECLARATIONS
     except ImportError:
         return "Error: package 'google-genai' is not installed."
 
@@ -116,27 +115,58 @@ def _call_gemini(user_message: str, history: list, system_prompt: str) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
     model_name = LLM_MODEL if LLM_MODEL.startswith("gemini") else "gemini-2.5-flash"
 
+    # Define Gemini tool schema
+    gemini_tools = types.Tool(
+        function_declarations=[
+            types.FunctionDeclaration(
+                name="check_pbg_status",
+                description="Memeriksa status real-time permohonan PBG dari database berdasarkan nomor registrasi.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "registration_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="Nomor registrasi (contoh: '6680', '2845')."
+                        )
+                    },
+                    required=["registration_id"]
+                )
+            ),
+            types.FunctionDeclaration(
+                name="check_document_vault",
+                description="Melihat dan mengunduh berkas lampiran, denah/gambar arsitektur, atau SK PBG dari brangkas penyimpanan.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "registration_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="Nomor registrasi berkas (contoh: '6680', '2845')."
+                        )
+                    },
+                    required=["registration_id"]
+                )
+            )
+        ]
+    )
+
     try:
-        # Execute chat generation with system prompt and function calling
         response = client.models.generate_content(
             model=model_name,
             contents=user_message,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                tools=[TOOL_DECLARATIONS]
+                tools=[gemini_tools]
             )
         )
 
-        # Check function calls
         if response.function_calls:
             fc = response.function_calls[0]
             func_name = fc.name
-            func_args = fc.args
+            func_args = dict(fc.args)
 
             if func_name in TOOL_REGISTRY:
                 tool_result_str = TOOL_REGISTRY[func_name](**func_args)
                 
-                # Send tool response back
                 followup = client.models.generate_content(
                     model=model_name,
                     contents=[

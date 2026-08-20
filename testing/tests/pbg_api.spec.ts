@@ -11,6 +11,7 @@ test.describe('PBG Assist Backend API Direct Integration Tests', () => {
     const body = await response.json();
     expect(body.status).toBe('healthy');
     expect(body.database).toBe('connected');
+    expect(body.storage_provider).toBeDefined();
   });
 
   test('2. Status lookup for 108564 from Transaksi2 should return record', async ({ request }) => {
@@ -24,7 +25,18 @@ test.describe('PBG Assist Backend API Direct Integration Tests', () => {
     expect(body.latest_step).toBeDefined();
   });
 
-  test('3. Chat endpoint should answer requirements queries via RAG', async ({ request }) => {
+  test('3. Document vault lookup for 6680 should return file list and direct URLs', async ({ request }) => {
+    const response = await request.get(`${BACKEND_URL}/api/documents/6680`);
+    expect(response.ok()).toBeTruthy();
+
+    const body = await response.json();
+    expect(body.status).toBe('Ditemukan');
+    expect(body.registration_id).toBe('6680');
+    expect(body.total_files).toBeGreaterThan(0);
+    expect(body.files[0].view_url).toContain('/storage/documents/6680/');
+  });
+
+  test('4. Chat endpoint should answer requirements queries via RAG', async ({ request }) => {
     const response = await request.post(`${BACKEND_URL}/api/chat`, {
       data: {
         message: 'Apa saja syarat PBG Rumah Tinggal Sederhana?',

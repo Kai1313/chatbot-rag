@@ -1,10 +1,12 @@
 import json
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from config import DATABASE_URL
 from models import Transaksi
+from storage import get_storage_provider
 
-# Tool declaration schema (OpenAI / DeepSeek / Gemini compatible)
+# Tool 1: Check PBG Status (Database SQL Lookup)
 TOOL_CHECK_PBG_STATUS = {
     "type": "function",
     "function": {
@@ -15,7 +17,26 @@ TOOL_CHECK_PBG_STATUS = {
             "properties": {
                 "registration_id": {
                     "type": "string",
-                    "description": "Nomor registrasi / nomor daftar permohonan PBG (Contoh: '6680', '138576', '146092')."
+                    "description": "Nomor registrasi / nomor daftar permohonan PBG (Contoh: '6680', '2845', '108564', '138576')."
+                }
+            },
+            "required": ["registration_id"]
+        }
+    }
+}
+
+# Tool 2: Check Document Vault (Brangkas / Berkas Lampiran)
+TOOL_CHECK_DOCUMENT_VAULT = {
+    "type": "function",
+    "function": {
+        "name": "check_document_vault",
+        "description": "Melihat dan mengunduh berkas lampiran, dokumen teknis, denah/gambar arsitektur, foto, atau SK PBG dari brangkas penyimpanan (lokal/cloud) berdasarkan nomor pendaftaran.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "registration_id": {
+                    "type": "string",
+                    "description": "Nomor registrasi / nomor daftar permohonan (Contoh: '6680', '2845', '14374', '102714')."
                 }
             },
             "required": ["registration_id"]
@@ -52,9 +73,7 @@ def check_pbg_status(registration_id: str) -> str:
 
         # Convert ORM objects to dicts
         records = [r.to_dict() for r in results]
-        
-        # Sort by process date / no_urut to identify latest state
-        latest_step = records[0] # Step 1 is top summary in log
+        latest_step = records[0]
         
         return json.dumps({
             "registration_id": reg_clean,
@@ -70,7 +89,32 @@ def check_pbg_status(registration_id: str) -> str:
             "message": f"Gagal mengakses database PostgreSQL: {exc}"
         }, ensure_ascii=False)
 
+def check_document_vault(registration_id: str) -> str:
+    """
+    Queries self-hosted or cloud storage provider for document attachments / blueprints / scans.
+    """
+    if not registration_id:
+        return json.dumps({"status": "error", "message": "Nomor daftar tidak boleh kosong."})
+
+    reg_clean = str(registration_id).strip()
+    if reg_clean.endswith('.0'):
+        reg_clean = reg_clean[:-2]
+
+    base_api_url = os.environ.get("BASE_API_URL", "http://localhost:8080")
+    provider = get_storage_provider()
+    res = provider.list_documents(reg_clean, base_url=base_api_url)
+    
+    # Add instructions for AI to format files into markdown list with clickable links
+    if res.get("status") == "Ditemukan" and res.get("files"):
+        res["instructions_for_ai"] = (
+            "Sajikan daftar dokumen kepada pengguna dalam bentuk bullet list rapi dengan format: "
+            "`* [Nama File](view_url) — Kategori (Ukuran)`. "
+            "Jika ada file SK PBG, tonjolkan secara khusus."
+        )
+    return json.dumps(res, ensure_ascii=False)
+
 # Dispatch registry
 TOOL_REGISTRY = {
-    "check_pbg_status": check_pbg_status
+    "check_pbg_status": check_pbg_status,
+    "check_document_vault": check_document_vault
 }

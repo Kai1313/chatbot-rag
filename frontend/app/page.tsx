@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Building2, Search, FileText, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -12,9 +12,9 @@ interface Message {
 
 const QUICK_PROMPTS = [
   { label: 'Syarat PBG Rumah Tinggal', icon: Building2, text: 'Apa saja dokumen persyaratan pengurusan PBG Rumah Tinggal Sederhana?' },
-  { label: 'Cek Status No. 6680', icon: Search, text: 'Cek status permohonan PBG dengan nomor berkas 6680' },
+  { label: 'Cek Status No. 108564', icon: Search, text: 'Cek status permohonan PBG dengan nomor berkas 108564' },
+  { label: 'Buka Dokumen No. 6680', icon: FolderArchive, text: 'Tampilkan berkas dan dokumen untuk nomor permohonan 6680' },
   { label: 'PBG Usaha Mikro', icon: FileText, text: 'Bagaimana prosedur dan syarat PBG Non Rumah Tinggal Usaha Mikro?' },
-  { label: 'PBG Menara Telecom', icon: Sparkles, text: 'Persyaratan PBG Menara Telekomunikasi apa saja?' },
 ];
 
 export default function Home() {
@@ -22,7 +22,7 @@ export default function Home() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Selamat datang di **PBG Assist**! 👋\n\nSaya adalah asisten AI resmi untuk Layanan Persetujuan Bangunan Gedung (PBG).\n\nAda yang bisa saya bantu hari ini?\n* **Tanyakan Persyaratan:** Dokumen PBG Rumah Tinggal, Usaha Mikro, Gedung, dll.\n* **Cek Status Permohonan:** Masukkan nomor berkas registrasi Anda (contoh: *6680*).`,
+      content: `Selamat datang di **PBG Assist**! 👋\n\nSaya adalah asisten AI resmi untuk Layanan Persetujuan Bangunan Gedung (PBG).\n\nAda yang bisa saya bantu hari ini?\n* **Tanyakan Persyaratan:** Dokumen PBG Rumah Tinggal, Usaha Mikro, Gedung, dll.\n* **Cek Status Permohonan:** Masukkan nomor berkas registrasi Anda (contoh: *108564* atau *6680*).\n* **Buka Brangkas Dokumen:** Lihat dan unduh lampiran/berkas (contoh: *Tampilkan dokumen berkas 6680*).`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -54,7 +54,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      // Always derive API host from browser window URL on port 8080 (e.g. 192.168.1.13:8080 or localhost:8080)
+      // Derive API host from browser URL on port 8080
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
       const apiUrl = `http://${currentHost}:8080`;
 
@@ -99,15 +99,50 @@ export default function Home() {
     return lines.map((line, idx) => {
       let processed = line;
 
-      const parts = processed.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+      // Handle Markdown Links [Text](url)
+      const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+
+      while ((match = linkRegex.exec(processed)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(processed.substring(lastIndex, match.index));
+        }
+        const linkText = match[1];
+        const linkHref = match[2];
+        parts.push(
+          <a
+            key={`link-${idx}-${match.index}`}
+            href={linkHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-400 hover:text-sky-300 underline font-medium hover:underline inline-flex items-center gap-1"
+          >
+            <span>{linkText}</span>
+            <span className="text-[10px] opacity-75">↗</span>
+          </a>
+        );
+        lastIndex = match.index + match[0].length;
+      }
+      if (lastIndex < processed.length) {
+        parts.push(processed.substring(lastIndex));
+      }
+
+      // Handle Bold & Italic
       const renderedParts = parts.map((part, pIdx) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={pIdx} className="font-semibold text-sky-200">{part.slice(2, -2)}</strong>;
-        }
-        if (part.startsWith('*') && part.endsWith('*')) {
-          return <em key={pIdx} className="text-slate-300">{part.slice(1, -1)}</em>;
-        }
-        return part;
+        if (typeof part !== 'string') return part;
+
+        const subParts = part.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+        return subParts.map((sub, sIdx) => {
+          if (sub.startsWith('**') && sub.endsWith('**')) {
+            return <strong key={`b-${pIdx}-${sIdx}`} className="font-semibold text-sky-200">{sub.slice(2, -2)}</strong>;
+          }
+          if (sub.startsWith('*') && sub.endsWith('*')) {
+            return <em key={`i-${pIdx}-${sIdx}`} className="text-slate-300">{sub.slice(1, -1)}</em>;
+          }
+          return sub;
+        });
       });
 
       if (line.startsWith('### ')) {
@@ -223,7 +258,7 @@ export default function Home() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Tanyakan syarat atau masukkan no. berkas..."
+            placeholder="Tanyakan syarat, no. berkas, atau buka dokumen..."
             className="flex-1 bg-slate-950 border border-slate-700/80 focus:border-sky-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all"
           />
           <button

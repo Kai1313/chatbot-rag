@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -13,13 +14,14 @@ sys.path.append(str(Path(__file__).parent))
 from database import engine, Base, get_db
 from models import Transaksi
 from llm_provider import generate_chat_response
-from tools import check_pbg_status
+from tools import check_pbg_status, check_document_vault
+from storage import get_storage_provider
 
 # Initialize FastAPI App
 app = FastAPI(
-    title="PBG Assist API",
-    description="Backend API for PBG Assist Mobile-First PWA RAG Chatbot",
-    version="1.0.0"
+    title="Hybrid RAG Chatbot API",
+    description="Backend API for Mobile-First PWA RAG Chatbot & Document Vault",
+    version="1.1.0"
 )
 
 # Configure CORS
@@ -30,6 +32,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Static Document Storage Route
+docs_dir_candidates = [
+    Path("/app/data/documents"),
+    Path(__file__).parent.parent / "data" / "documents",
+    Path(__file__).parent / "data" / "documents",
+    Path("./data/documents")
+]
+docs_path = Path("./data/documents")
+for p in docs_dir_candidates:
+    if p.exists():
+        docs_path = p
+        break
+
+os.makedirs(docs_path, exist_ok=True)
+app.mount("/storage/documents", StaticFiles(directory=str(docs_path)), name="documents")
 
 # Ensure tables are created on startup
 @app.on_event("startup")
@@ -68,7 +86,8 @@ def health_check(db: Session = Depends(get_db)):
         "status": "healthy",
         "database": db_status,
         "llm_provider": os.getenv("LLM_PROVIDER", "deepseek"),
-        "llm_model": os.getenv("LLM_MODEL", "deepseek-chat")
+        "llm_model": os.getenv("LLM_MODEL", "deepseek-chat"),
+        "storage_provider": os.getenv("STORAGE_PROVIDER", "local")
     }
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -95,9 +114,16 @@ def status_lookup(no_daftar: str):
     import json
     return json.loads(result_json_str)
 
+@app.get("/api/documents/{no_daftar}")
+def documents_lookup(no_daftar: str):
+    """Direct JSON documents lookup by registration number."""
+    result_json_str = check_document_vault(no_daftar)
+    import json
+    return json.loads(result_json_str)
+
 @app.post("/api/ingest")
 def trigger_ingestion(background_tasks: BackgroundTasks):
-    """Triggers background data ingestion from PERIZINAN PBG.xlsx."""
+    """Triggers background data ingestion."""
     from ingest import main as run_ingestion
     background_tasks.add_task(run_ingestion)
     return {"message": "Data ingestion task started in background."}

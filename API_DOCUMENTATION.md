@@ -7,7 +7,7 @@ This document outlines the REST API endpoints provided by the **FastAPI Backend 
 ## 1. System Healthcheck
 
 ### `GET /api/health`
-Verifies backend service status, PostgreSQL database connectivity, and current LLM provider configuration.
+Verifies backend service status, PostgreSQL database connectivity, LLM provider, and Document Vault storage provider.
 
 * **Request**: None
 * **Response (200 OK)**:
@@ -16,7 +16,8 @@ Verifies backend service status, PostgreSQL database connectivity, and current L
   "status": "healthy",
   "database": "connected",
   "llm_provider": "deepseek",
-  "llm_model": "deepseek-chat"
+  "llm_model": "deepseek-chat",
+  "storage_provider": "local"
 }
 ```
 
@@ -25,7 +26,7 @@ Verifies backend service status, PostgreSQL database connectivity, and current L
 ## 2. Chat Completion & RAG
 
 ### `POST /api/chat`
-Primary endpoint for the PWA client to send user queries, perform RAG retrieval on ChromaDB, trigger tool calling on PostgreSQL, and return generated answers.
+Primary endpoint for the PWA client to send user queries, perform RAG retrieval on ChromaDB, trigger tool calling (`check_pbg_status`, `check_document_vault`), and return generated answers.
 
 * **Headers**: `Content-Type: application/json`
 * **Request Body**:
@@ -86,7 +87,52 @@ Direct JSON lookup for application tracking history by registration number (`no_
 
 ---
 
-## 4. Trigger Background Data Ingestion
+## 4. Document Vault & File Attachments Lookup
+
+### `GET /api/documents/{no_daftar}`
+Direct JSON lookup for document attachments, blueprints, scans, and certificates in the self-hosted vault or cloud storage.
+
+* **Example**: `GET /api/documents/6680`
+* **Response (200 OK)**:
+```json
+{
+  "status": "Ditemukan",
+  "registration_id": "6680",
+  "provider": "local",
+  "total_files": 12,
+  "message": "Ditemukan 12 file dokumen/gambar untuk berkas nomor '6680'.",
+  "files": [
+    {
+      "name": "6680_SK.pdf",
+      "extension": ".pdf",
+      "mimeType": "application/pdf",
+      "category": "Sertifikat / Surat Keputusan (SK)",
+      "size_kb": 405.0,
+      "view_url": "http://localhost:8080/storage/documents/6680/6680_SK.pdf",
+      "download_url": "http://localhost:8080/storage/documents/6680/6680_SK.pdf",
+      "is_pdf": true
+    },
+    {
+      "name": "9.dwg",
+      "extension": ".dwg",
+      "mimeType": "application/acad",
+      "category": "Gambar Rencana AutoCAD (DWG)",
+      "size_kb": 831.8,
+      "view_url": "http://localhost:8080/storage/documents/6680/9.dwg",
+      "download_url": "http://localhost:8080/storage/documents/6680/9.dwg",
+      "is_cad": true
+    }
+  ]
+}
+```
+
+### Static Direct File Download / Preview Route
+* URL format: `GET /storage/documents/{registration_id}/{filename}`
+* Example: `http://localhost:8080/storage/documents/6680/6680_SK.pdf`
+
+---
+
+## 5. Trigger Background Data Ingestion
 
 ### `POST /api/ingest`
 Triggers a background task to re-parse the target dataset (`PERIZINAN_PBG_2.xlsx` / custom data file) and reload PostgreSQL & ChromaDB.
