@@ -3,8 +3,8 @@ from database import Base
 
 class Transaksi(Base):
     """
-    SQLAlchemy model representing application workflow tracking logs.
-    Populated from the 'Transaksi2' worksheet of PERIZINAN_PBG_2.xlsx or custom dataset.
+    SQLAlchemy model representing workflow tracking logs and ticket history.
+    Populated from workflow tracking dataset (e.g. sample_dataset.xlsx or custom dataset).
     """
     __tablename__ = "transaksi"
 

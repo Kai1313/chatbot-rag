@@ -90,8 +90,8 @@ def parse_xlsx_raw(file_path):
         return results
 
 def ingest_to_postgresql(excel_path):
-    """Ingests Transaksi2 sheet (or TRANSAKSI fallback) into PostgreSQL database."""
-    print("--- 1. Ingesting Transaksi to PostgreSQL ---")
+    """Ingests workflow tracking sheet into PostgreSQL database."""
+    print("--- 1. Ingesting Workflow Tracking to PostgreSQL ---")
     try:
         from database import engine, Base
         from models import Transaksi
@@ -102,12 +102,33 @@ def ingest_to_postgresql(excel_path):
 
     raw_sheets = parse_xlsx_raw(excel_path)
     
-    # Prioritize Transaksi2 sheet from PERIZINAN_PBG_2.xlsx
-    rows = raw_sheets.get("Transaksi2", raw_sheets.get("TRANSAKSI ", raw_sheets.get("TRANSAKSI", [])))
-    sheet_name = "Transaksi2" if "Transaksi2" in raw_sheets else "TRANSAKSI"
-    
+    # 1. Configured sheet or dynamic discovery
+    target_sheet = os.getenv("TRACKING_SHEET", "").strip()
+    sheet_name = None
+    rows = []
+
+    if target_sheet and target_sheet in raw_sheets:
+        sheet_name = target_sheet
+        rows = raw_sheets[target_sheet]
+    else:
+        # Keyword auto-discovery
+        keywords = ["transaksi2", "transaksi", "tracking", "permohonan", "workflows", "transactions", "steps", "data"]
+        for kw in keywords:
+            for s_name in raw_sheets.keys():
+                if kw in s_name.lower():
+                    sheet_name = s_name
+                    rows = raw_sheets[s_name]
+                    break
+            if rows:
+                break
+
+    if not rows and raw_sheets:
+        # Fallback to the first sheet with data
+        sheet_name = list(raw_sheets.keys())[0]
+        rows = raw_sheets[sheet_name]
+
     if not rows:
-        print(f"No rows found in {sheet_name} sheet.")
+        print("[Ingestion Warning] No suitable tracking sheet found in dataset.")
         return
 
     data = rows[1:] # Skip header
@@ -164,8 +185,8 @@ def ingest_to_postgresql(excel_path):
     session.close()
 
 def ingest_to_chromadb(excel_path):
-    """Ingests SYARAT sheet into local ChromaDB vector store."""
-    print("\n--- 2. Ingesting SYARAT to ChromaDB Vector Database ---")
+    """Ingests knowledge/requirements sheet into local ChromaDB vector store."""
+    print("\n--- 2. Ingesting Knowledge Base to ChromaDB Vector Database ---")
     try:
         import chromadb
     except ImportError:
@@ -173,9 +194,34 @@ def ingest_to_chromadb(excel_path):
         return
 
     raw_sheets = parse_xlsx_raw(excel_path)
-    rows = raw_sheets.get("SYARAT", [])
+    
+    # 1. Configured sheet or dynamic discovery
+    target_sheet = os.getenv("KNOWLEDGE_SHEET", "").strip()
+    sheet_name = None
+    rows = []
+
+    if target_sheet and target_sheet in raw_sheets:
+        sheet_name = target_sheet
+        rows = raw_sheets[target_sheet]
+    else:
+        # Keyword auto-discovery
+        keywords = ["syarat", "persyaratan", "knowledge", "faq", "rules", "requirements", "regulations", "docs", "pedoman"]
+        for kw in keywords:
+            for s_name in raw_sheets.keys():
+                if kw in s_name.lower():
+                    sheet_name = s_name
+                    rows = raw_sheets[s_name]
+                    break
+            if rows:
+                break
+
+    if not rows and raw_sheets:
+        # Fallback
+        sheet_name = list(raw_sheets.keys())[-1]
+        rows = raw_sheets[sheet_name]
+
     if not rows:
-        print("No rows found in SYARAT sheet.")
+        print("[Ingestion Warning] No suitable knowledge sheet found in dataset.")
         return
 
     data = rows[1:]

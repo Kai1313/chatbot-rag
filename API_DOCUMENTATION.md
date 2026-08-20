@@ -135,7 +135,7 @@ Direct JSON lookup for document attachments, blueprints, scans, and certificates
 ## 5. Trigger Background Data Ingestion
 
 ### `POST /api/ingest`
-Triggers a background task to re-parse the target dataset (`PERIZINAN_PBG_2.xlsx` / custom data file) and reload PostgreSQL & ChromaDB.
+Triggers a background task to re-parse the target dataset (`sample_dataset.xlsx` / custom data file) and reload PostgreSQL & ChromaDB.
 
 * **Response (200 OK)**:
 ```json
