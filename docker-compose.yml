@@ -37,6 +37,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
       - BASE_API_URL=${BASE_API_URL:-http://localhost:8080}
+      - DATASET_PATH=${DATASET_PATH:-PERIZINAN_PBG_2.xlsx}
     volumes:
       - ./data/chroma:/app/chroma_db
       - ./data/documents:/app/data/documents

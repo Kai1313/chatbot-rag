@@ -21,27 +21,23 @@ def excel_serial_to_datetime(serial_num):
         return None
 
 def find_excel_file():
-    """Finds PERIZINAN_PBG_2.xlsx, custom dataset, or fallback Excel files in data directories."""
+    """Finds target dataset from DATASET_PATH env variable or PERIZINAN_PBG_2.xlsx."""
+    env_dataset = os.getenv("DATASET_PATH", "PERIZINAN_PBG_2.xlsx").strip()
+
     candidates = [
-        Path("/app/data_source/PERIZINAN_PBG_2.xlsx"),
-        Path("/app/data/PERIZINAN_PBG_2.xlsx"),
-        Path(__file__).parent / "PERIZINAN_PBG_2.xlsx",
-        Path(__file__).parent.parent / "PERIZINAN_PBG_2.xlsx",
-        Path("/app/PERIZINAN_PBG_2.xlsx"),
-        Path("PERIZINAN_PBG_2.xlsx"),
-        Path("./data/PERIZINAN_PBG_2.xlsx"),
-        Path("/app/data_source/PERIZINAN PBG.xlsx"),
-        Path("/app/data/PERIZINAN PBG.xlsx"),
-        Path(__file__).parent / "PERIZINAN PBG.xlsx",
-        Path(__file__).parent.parent / "PERIZINAN PBG.xlsx"),
-        Path("/app/PERIZINAN PBG.xlsx"),
-        Path("PERIZINAN PBG.xlsx"),
+        Path(f"/app/data_source/{env_dataset}"),
+        Path(f"/app/data/{env_dataset}"),
+        Path(f"./data/{env_dataset}"),
+        Path(env_dataset),
+        Path(__file__).parent / env_dataset,
+        Path(__file__).parent.parent / env_dataset,
+        Path(f"/app/{env_dataset}"),
     ]
     for p in candidates:
-        if p.exists():
+        if p.exists() and p.is_file():
             return p
 
-    # Fallback: scan /app/data_source or ./data for any .xlsx file
+    # Fallback: scan /app/data_source, /app/data, or ./data for any target .xlsx file
     search_dirs = [Path("/app/data_source"), Path("/app/data"), Path("./data"), Path(".")]
     for d in search_dirs:
         if d.exists() and d.is_dir():
