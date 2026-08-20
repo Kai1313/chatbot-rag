@@ -3,6 +3,7 @@
 A modern, fullstack, mobile-first **Progressive Web App (PWA) Chatbot & Real-Time Tracking Engine** built with a **Hybrid RAG Architecture**:
 * **Semantic Vector Search (ChromaDB)** for answering complex rules, guidelines, and document requirements.
 * **Structured Relational Database (PostgreSQL)** for exact, 100% accurate status lookups across multi-stage application workflows.
+* **Self-Hosted & Cloud Hybrid Document Vault**: Direct file preview & download for PDFs, blueprints (AutoCAD DWG), and site photos with zero rate limits (switchable to Google Drive / S3).
 * **Model-Agnostic AI Engine**: Seamlessly switch between **DeepSeek-V3**, **Google Gemini**, **Groq**, **OpenAI**, or **Ollama** via simple `.env` toggles.
 
 > 💡 **Reference Implementation Included**: Out of the box, this repository includes **PBG Assist** (Building Permit Assistant) as a fully functional domain template, but it can be adapted to **any custom tracking or support workflow** (permits, licensing, hospital queues, logistics, or customer service tickets).
@@ -11,10 +12,13 @@ A modern, fullstack, mobile-first **Progressive Web App (PWA) Chatbot & Real-Tim
 
 ## 🌟 Key Features
 
-* **📱 Mobile-First PWA**: Touch-optimized Next.js 14 frontend with quick prompt pills, markdown rendering, and "Add to Home Screen" support (iOS / Android).
+* **📱 Mobile-First PWA**: Touch-optimized Next.js 14 frontend with quick prompt pills, markdown rendering, clickable document links, and "Add to Home Screen" support (iOS / Android).
 * **🧠 Hybrid RAG Architecture**:
   * Vector Store (`ChromaDB`) for unstructured domain knowledge.
   * Relational DB (`PostgreSQL` on port `5431`) for exact SQL queries & status logs.
+* **📁 Self-Hosted & Cloud Document Vault**:
+  * Browse and download application files, blueprints, and certificates directly via the chat UI.
+  * Default self-hosted storage (`./data/documents`) with optional adapter for Google Drive / S3.
 * **🔌 Plug-and-Play Custom Datasets**: Ingest your own Excel / CSV / JSON / API data in minutes using provided templates.
 * **🐳 One-Command Deployment**: Fully containerized Docker Compose stack (PostgreSQL + FastAPI + Next.js).
 * **🧪 Automated Test Suite**: Comprehensive Playwright E2E and REST API test suite included.
@@ -30,6 +34,7 @@ A modern, fullstack, mobile-first **Progressive Web App (PWA) Chatbot & Real-Tim
 ```bash
 git clone https://github.com/Kai1313/chatbot-rag.git
 cd chatbot-rag
+git checkout development
 cp .env.example .env
 ```
 
@@ -38,6 +43,9 @@ Edit `.env` to select your preferred AI provider:
 LLM_PROVIDER=deepseek
 LLM_MODEL=deepseek-chat
 DEEPSEEK_API_KEY=your_actual_deepseek_api_key
+
+# Document storage (default: local)
+STORAGE_PROVIDER=local
 ```
 
 ### 2. Launch Docker Stack
@@ -49,6 +57,30 @@ Access the services:
 * **Mobile-First PWA Frontend**: [http://localhost:3000](http://localhost:3000) or `http://<your-computer-ip>:3000` (on mobile Wi-Fi)
 * **FastAPI Backend API**: [http://localhost:8080](http://localhost:8080)
 * **Interactive API Docs**: [http://localhost:8080/docs](http://localhost:8080/docs)
+
+---
+
+## 📁 Document Vault Structure & Usage
+
+You can attach files (PDFs, CAD blueprints `.dwg`, images `.jpg`/`.png`) organized by application registration ID:
+
+```
+data/
+└── documents/
+    ├── 6680/
+    │   ├── 6680_SK.pdf
+    │   ├── 1.pdf
+    │   └── 9.dwg
+    └── 2845/
+        ├── 2845_SK.pdf
+        └── 10.dwg
+```
+
+Users can ask:
+* *"Tampilkan dokumen berkas nomor 6680"*
+* *"Ada berkas apa saja untuk pendaftaran 2845?"*
+
+The chatbot will return clickable preview/download links with category and file size tags.
 
 ---
 
@@ -102,7 +134,7 @@ npm test
 
 ## 📚 Documentation
 
-* **[Data Schema Guide](data_template/DATA_SCHEMA_GUIDE.md)** — Custom dataset preparation and column definitions.
 * **[API Documentation](API_DOCUMENTATION.md)** — FastAPI REST endpoints reference.
+* **[Data Schema Guide](data_template/DATA_SCHEMA_GUIDE.md)** — Custom dataset preparation and column definitions.
 * **[Prompt & Guardrails Guide](PROMPT_GUIDE.md)** — System prompt personas and out-of-scope protection rules.
 * **[Architecture & Build Plan](RAG_BUILD_PLAN.md)** — Full technical specification and architecture diagrams.

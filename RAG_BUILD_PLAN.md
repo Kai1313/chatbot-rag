@@ -1,6 +1,6 @@
 # Hybrid RAG Chatbot & Tracking Engine Implementation Specification
 
-This document represents the validated technical specification, architecture blueprint, and live progress tracker for the **Hybrid RAG Chatbot & Multi-Stage Workflow Tracking Engine** (featuring the **PBG Assist** reference domain), built with a fully containerized **PostgreSQL** database, **ChromaDB** vector store, and a **Mobile-First Next.js PWA**.
+This document represents the validated technical specification, architecture blueprint, and live progress tracker for the **Hybrid RAG Chatbot & Multi-Stage Workflow Tracking Engine** (featuring the **PBG Assist** reference domain), built with a fully containerized **PostgreSQL** database, **ChromaDB** vector store, **Self-Hosted & Cloud Hybrid Document Vault**, and a **Mobile-First Next.js PWA**.
 
 ---
 
@@ -21,15 +21,15 @@ This document represents the validated technical specification, architecture blu
  |  |                        FastAPI Backend (Python 3.11)                        |  |
  |  |  - Model-Agnostic Engine (DeepSeek / Gemini / Groq / OpenAI / Ollama)       |  |
  |  |  - Intent Router & SQL Tool Calling (`check_pbg_status`)                    |  |
- |  +--------------------+-----------------------------------+--------------------+  |
- |                       |                                   |                       |
- |                       v                                   v                       |
- |  +--------------------+-------------------+   +-----------+--------------------+  |
- |  |  ChromaDB Vector DB                    |   |  PostgreSQL Database (port 5431)   |  |
- |  |  (Knowledge / Requirements: `SYARAT`)  |   |  - Table: `transaksi`              |  |
- |  |                                        |   |  - Direct GUI Access via Navicat,  |  |
- |  |                                        |   |    HeidiSQL, DBeaver               |  |
- |  +----------------------------------------+   +------------------------------------+  |
+ |  |  - Document Vault Storage Tool (`check_document_vault`)                     |  |
+ |  +----------+--------------------------+-----------------------+---------------+  |
+ |             |                          |                       |                  |
+ |             v                          v                       v                  v
+ |  +----------+---------+     +----------+---------+   +---------+-------+  +-------+-------+
+ |  | ChromaDB Vector DB |     | PostgreSQL DB 5431 |   | Local Doc Vault |  | Cloud Storage |
+ |  | (Knowledge / Rules)|     | Table: `transaksi` |   | ./data/documents|  | Google Drive  |
+ |  | `SYARAT` Dataset   |     | `Transaksi2` (95)  |   | Static File Srv |  | AWS S3 / R2   |
+ |  +--------------------+     +--------------------+   +-----------------+  +---------------+
  |                                                                                   |
  |  +-----------------------------------------------------------------------------+  |
  |  |                  Data Ingestion Pipeline (backend/ingest.py)                |  |
@@ -44,7 +44,7 @@ This document represents the validated technical specification, architecture blu
 
 ### A. PostgreSQL Configuration (`postgres:16-alpine`)
 * **Host Port Mapping**: `5431:5432` (Mapped to host port 5431 to prevent host port 5432 collisions).
-* **Direct GUI Connection**: You can directly open **Navicat**, **HeidiSQL**, **DBeaver**, or **pgAdmin** and connect using:
+* **Direct GUI Connection**: Connect via **Navicat**, **HeidiSQL**, **DBeaver**, or **pgAdmin**:
   * **Host**: `localhost` (or `127.0.0.1`)
   * **Port**: `5431`
   * **Database Name**: `local_db`
@@ -71,15 +71,15 @@ This document represents the validated technical specification, architecture blu
 
 ---
 
-## 3. Data Pipeline & Hybrid Retrieval
+## 3. Storage Provider & Document Vault Abstraction
 
-1. **Ingestion Pipeline (`backend/ingest.py`)**:
-   * Reads dataset (`PERIZINAN_PBG_2.xlsx` / custom data sources).
-   * Bulk-inserts multi-stage tracking logs (`Transaksi2` sheet, 2,050 records across 95 registration numbers) into **PostgreSQL**.
-   * Chunks requirements rules (`SYARAT` sheet, 998 records across 9 categories) and populates **ChromaDB**.
-2. **Hybrid RAG Routing**:
-   * **Knowledge / Requirements Queries** $\rightarrow$ Semantic similarity search on **ChromaDB**.
-   * **Status Check Queries** $\rightarrow$ Parameterized SQL query on **PostgreSQL** (`SELECT * FROM transaksi WHERE no_daftar = :id ORDER BY no_urut ASC`).
+1. **Self-Hosted Local Vault (`LocalStorageProvider`)**:
+   * Storage Directory: `./data/documents/{registration_id}/` (mounted in Docker as `/app/data/documents`).
+   * Supported formats: `.pdf` (certificates/scans), `.dwg` (AutoCAD blueprints), `.jpg`/`.png`/`.webp` (site photos).
+   * Static Endpoint: `http://localhost:8080/storage/documents/{registration_id}/{filename}`.
+2. **Cloud Storage Adapter (`GoogleDriveStorageProvider`)**:
+   * Switchable via `STORAGE_PROVIDER=gdrive` in `.env`.
+   * Queries Google Drive API using service account credentials.
 
 ---
 
@@ -91,6 +91,9 @@ Backend is configured with a unified provider interface selectable via `.env`:
 LLM_PROVIDER=deepseek         # Options: deepseek, gemini, groq, openai, ollama
 LLM_MODEL=deepseek-chat
 DEEPSEEK_API_KEY=your_key_here
+
+# Storage provider:
+STORAGE_PROVIDER=local        # Options: local, gdrive, s3
 ```
 
 ---
@@ -135,8 +138,11 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
+      - BASE_API_URL=${BASE_API_URL:-http://localhost:8080}
     volumes:
       - ./data/chroma:/app/chroma_db
+      - ./data/documents:/app/data/documents
     depends_on:
       db:
         condition: service_healthy
@@ -171,4 +177,5 @@ volumes:
 - [x] **Step 5: Dockerization & Host Collision Prevention**: Configured `Dockerfile.backend`, `Dockerfile.frontend`, `docker-compose.yml`, and mapped FastAPI to host port `8080` (preventing Windows port 8000 collisions).
 - [x] **Step 6: Playwright Automated Test Suite**: Created multi-device E2E and REST API test suite in `testing/` (`testing/tests/pbg_assist.spec.ts` & `testing/tests/pbg_api.spec.ts`).
 - [x] **Step 7: Custom Dataset Templates & Schema Guide**: Created `data_template/DATA_SCHEMA_GUIDE.md`, `data_template/sample_syarat.csv`, and `data_template/sample_transaksi.csv`.
-- [x] **Step 8: Data Privacy & Git Security**: Configured `.gitignore` to exclude `*.xlsx`, `*.xls`, `*.csv` and secret keys from Git repository tracking.
+- [x] **Step 8: Data Privacy & Git Security**: Configured `.gitignore` to exclude `*.xlsx`, `*.xls`, `*.csv`, and `data/documents/` from Git repository tracking.
+- [x] **Step 9: Hybrid Document Vault Storage (`development` branch)**: Created `backend/storage.py` abstraction, `check_document_vault` tool, `/storage/documents` static file server, and UI clickable link rendering.
