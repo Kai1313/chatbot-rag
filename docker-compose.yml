@@ -40,6 +40,7 @@ services:
     volumes:
       - ./data/chroma:/app/chroma_db
       - ./data/documents:/app/data/documents
+      - ./:/app/data_source:ro
     depends_on:
       db:
         condition: service_healthy

@@ -13,10 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code and dataset files
+# Copy backend application code only
 COPY backend/ /app/
-COPY ["PERIZINAN_PBG_2.xlsx", "/app/PERIZINAN_PBG_2.xlsx"]
-COPY ["PERIZINAN PBG.xlsx", "/app/PERIZINAN PBG.xlsx"]
 
 EXPOSE 8000
 

@@ -21,21 +21,35 @@ def excel_serial_to_datetime(serial_num):
         return None
 
 def find_excel_file():
-    """Finds PERIZINAN_PBG_2.xlsx or PERIZINAN PBG.xlsx in common target locations."""
+    """Finds PERIZINAN_PBG_2.xlsx, custom dataset, or fallback Excel files in data directories."""
     candidates = [
+        Path("/app/data_source/PERIZINAN_PBG_2.xlsx"),
+        Path("/app/data/PERIZINAN_PBG_2.xlsx"),
         Path(__file__).parent / "PERIZINAN_PBG_2.xlsx",
         Path(__file__).parent.parent / "PERIZINAN_PBG_2.xlsx",
         Path("/app/PERIZINAN_PBG_2.xlsx"),
         Path("PERIZINAN_PBG_2.xlsx"),
+        Path("./data/PERIZINAN_PBG_2.xlsx"),
+        Path("/app/data_source/PERIZINAN PBG.xlsx"),
+        Path("/app/data/PERIZINAN PBG.xlsx"),
         Path(__file__).parent / "PERIZINAN PBG.xlsx",
-        Path(__file__).parent.parent / "PERIZINAN PBG.xlsx",
+        Path(__file__).parent.parent / "PERIZINAN PBG.xlsx"),
         Path("/app/PERIZINAN PBG.xlsx"),
         Path("PERIZINAN PBG.xlsx"),
     ]
     for p in candidates:
         if p.exists():
             return p
-    raise FileNotFoundError("Excel dataset file could not be located in project directories.")
+
+    # Fallback: scan /app/data_source or ./data for any .xlsx file
+    search_dirs = [Path("/app/data_source"), Path("/app/data"), Path("./data"), Path(".")]
+    for d in search_dirs:
+        if d.exists() and d.is_dir():
+            for f in d.glob("*.xlsx"):
+                if not f.name.startswith("~$"):
+                    return f
+
+    return None
 
 def parse_xlsx_raw(file_path):
     """Raw XML parser for XLSX files (works without pandas or openpyxl)."""
@@ -232,6 +246,10 @@ def ingest_to_chromadb(excel_path):
 
 def main():
     excel_path = find_excel_file()
+    if not excel_path:
+        print("[Ingestion Notice] No target dataset (.xlsx) found in ./data or root folder.")
+        print("[Ingestion Notice] Backend is running. You can place your dataset file anytime and call POST /api/ingest.")
+        return
     print(f"Target Excel file found at: {excel_path}")
     ingest_to_postgresql(excel_path)
     ingest_to_chromadb(excel_path)
