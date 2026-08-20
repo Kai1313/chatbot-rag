@@ -96,7 +96,6 @@ export default function Home() {
       return;
     }
 
-    // If already speaking this message, toggle pause/stop
     if (currentlySpeakingId === messageId && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
       setCurrentlySpeakingId(null);
@@ -132,7 +131,6 @@ export default function Home() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Stop any active speech
   const stopSpeech = () => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -140,75 +138,77 @@ export default function Home() {
     setCurrentlySpeakingId(null);
   };
 
-  // Speech Recognition (STT / Voice Input)
+  // Speech Recognition (STT / Voice Input) Setup — matching Sean's exact pattern
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'id-ID';
+
+        recognition.onresult = (event: any) => {
+          let currentTranscript = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            currentTranscript += event.results[i][0].transcript;
+          }
+          if (currentTranscript) {
+            setInput(currentTranscript);
+            setMicStatusMsg(`🎙️ Terdeteksi: "${currentTranscript}"`);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error('Speech recognition error', event.error);
+          setIsListening(false);
+          if (event.error === 'not-allowed') {
+            setMicStatusMsg('⚠️ Izin mikrofon ditolak.');
+          } else if (event.error === 'no-speech') {
+            setMicStatusMsg('Tidak ada suara terdeteksi.');
+          } else {
+            setMicStatusMsg(`Status mic: ${event.error}`);
+          }
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+          setTimeout(() => setMicStatusMsg(null), 3000);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+  }, []);
+
   const toggleListening = () => {
     initVoice();
     stopSpeech();
 
-    if (typeof window === 'undefined') return;
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert('Browser Anda belum mendukung Speech Recognition. Silakan gunakan Google Chrome, Microsoft Edge, atau Safari.');
+    if (!recognitionRef.current) {
+      if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        alert('Fitur mikrofon browser dibatasi oleh kebijakan keamanan Web pada jaringan HTTP IP lokal.\n\nTips:\n1. Buka di http://localhost:3000 pada komputer, ATAU\n2. Gunakan tombol mikrofon langsung pada keyboard smartphone Anda (Gboard/iOS Keyboard) untuk mengetik dengan suara!');
+        return;
+      }
+      alert('Browser Anda tidak mendukung fitur pengenalan suara (Speech Recognition). Gunakan Google Chrome, Microsoft Edge, atau Safari.');
       return;
     }
 
-    if (isListening && recognitionRef.current) {
+    if (isListening) {
       try {
         recognitionRef.current.stop();
       } catch (e) {}
       setIsListening(false);
       setMicStatusMsg(null);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'id-ID';
-
-      recognition.onstart = () => {
+    } else {
+      try {
+        recognitionRef.current.start();
         setIsListening(true);
         setMicStatusMsg('🎙️ Mendengarkan suara Anda... Silakan bicara.');
-      };
-
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = 0; i < event.results.length; ++i) {
-          transcript += event.results[i][0].transcript;
-        }
-        if (transcript) {
-          setInput(transcript);
-          setMicStatusMsg(`🎙️ Terdeteksi: "${transcript}"`);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          alert('Izin akses mikrofon ditolak di browser Anda. Klik ikon gembok / izin di sebelah URL browser dan pilih "Allow Microphone".');
-          setMicStatusMsg('⚠️ Izin mikrofon ditolak.');
-        } else if (event.error === 'no-speech') {
-          setMicStatusMsg('Tidak ada suara terdeteksi. Silakan coba lagi.');
-        } else {
-          setMicStatusMsg(`Status mic: ${event.error}`);
-        }
+      } catch (err: any) {
+        console.error('Error starting recognition:', err);
         setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        setTimeout(() => setMicStatusMsg(null), 2500);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err: any) {
-      console.error('Error starting speech recognition:', err);
-      alert(`Gagal mengakses mikrofon: ${err.message || err}`);
-      setIsListening(false);
+      }
     }
   };
 
