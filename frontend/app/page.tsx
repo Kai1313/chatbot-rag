@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Send, Building2, Search, FileText, RefreshCw, Sparkles, FolderArchive, Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -30,10 +30,11 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isListening, setIsListening] = useState(false);
+  const [micStatusMsg, setMicStatusMsg] = useState<string | null>(null);
   const [lastSpokenId, setLastSpokenId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionInstanceRef = useRef<any>(null);
   const voiceInitializedRef = useRef(false);
 
   const scrollToBottom = () => {
@@ -86,57 +87,98 @@ export default function Home() {
     );
   };
 
-  // Speech Recognition (STT / Voice Input) Setup
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = 'id-ID';
-
-        recognition.onresult = (event: any) => {
-          let transcript = '';
-          for (let i = 0; i < event.results.length; ++i) {
-            transcript += event.results[i][0].transcript;
-          }
-          if (transcript) {
-            setInput(transcript);
-          }
-        };
-
-        recognition.onerror = (event: any) => {
-          console.warn('Speech recognition error:', event.error);
-          setIsListening(false);
-        };
-
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current = recognition;
+  // Stop listening helper
+  const stopListening = useCallback(() => {
+    if (recognitionInstanceRef.current) {
+      try {
+        recognitionInstanceRef.current.stop();
+      } catch (e) {
+        console.warn('Error stopping recognition:', e);
       }
+      recognitionInstanceRef.current = null;
     }
+    setIsListening(false);
+    setMicStatusMsg(null);
   }, []);
 
-  const toggleListening = () => {
+  // Start fresh listening session
+  const startListening = async () => {
     initVoice();
-    if (!recognitionRef.current) {
-      alert('Browser Anda belum mendukung fitur pengenalan suara (Speech Recognition).');
+
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Browser ini belum mendukung Web Speech API atau fitur pengenalan suara diblokir. Pastikan Anda mengakses via http://localhost:3000 atau koneksi HTTPS.');
       return;
     }
 
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (err) {
-        console.error('Error starting recognition:', err);
+    // Request microphone permissions first
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
       }
+    } catch (permErr: any) {
+      console.error('Microphone permission error:', permErr);
+      setMicStatusMsg('⚠️ Izin mikrofon ditolak di browser. Mohon izinkan mikrofon di pengaturan browser.');
+      return;
+    }
+
+    try {
+      // Always create a clean new instance per session to avoid invalid state errors
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'id-ID';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setMicStatusMsg('🎙️ Mendengarkan suara Anda... Silakan bicara.');
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript) {
+          setInput(transcript);
+          setMicStatusMsg(`🎙️ Mendengarkan: "${transcript.slice(-40)}"`);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          setMicStatusMsg('⚠️ Izin mikrofon ditolak oleh browser.');
+        } else if (event.error === 'no-speech') {
+          setMicStatusMsg('Tidak ada suara terdeteksi.');
+        } else {
+          setMicStatusMsg(`Kendala audio: ${event.error}`);
+        }
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setMicStatusMsg(null);
+      };
+
+      recognitionInstanceRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error('Failed to start speech recognition:', err);
+      setMicStatusMsg(`Gagal memulai mikrofon: ${err.message || err}`);
+      setIsListening(false);
+    }
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
     }
   };
 
@@ -190,10 +232,7 @@ export default function Home() {
 
   const handleSend = async (textToSend?: string) => {
     initVoice();
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
+    stopListening();
 
     const query = (textToSend || input).trim();
     if (!query || loading) return;
@@ -361,6 +400,7 @@ export default function Home() {
               if (typeof window !== 'undefined' && window.speechSynthesis) {
                 window.speechSynthesis.cancel();
               }
+              stopListening();
               setMessages([messages[0]]);
             }}
             className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
@@ -402,6 +442,14 @@ export default function Home() {
 
         <div ref={messagesEndRef} />
       </main>
+
+      {/* Mic Active Status Bar */}
+      {micStatusMsg && (
+        <div className="px-4 py-2 bg-slate-950/90 border-t border-slate-800 flex items-center gap-2 text-[11px] text-sky-300 animate-pulse">
+          <Sparkles className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+          <span className="truncate">{micStatusMsg}</span>
+        </div>
+      )}
 
       {/* Quick Suggestion Pills */}
       {messages.length <= 2 && (
